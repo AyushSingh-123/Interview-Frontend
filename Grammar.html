@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Voice Evaluation</title>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      padding: 30px;
+      background-color: #212121;
+      color: #ffffff;
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+    }
+    h2 {
+      font-size: 2rem;
+      color: #00bcd4;
+      margin-bottom: 20px;
+      letter-spacing: 2px;
+    }
+    #paragraph {
+      font-size: 1.5rem;
+      margin-bottom: 20px;
+      background: #333;
+      padding: 15px;
+      border-radius: 10px;
+      color: #fff;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+      width: 80%;
+      max-width: 600px;
+    }
+    button {
+      padding: 12px 30px;
+      font-size: 18px;
+      margin: 15px;
+      cursor: pointer;
+      background-color: #00bcd4;
+      border: none;
+      color: #fff;
+      border-radius: 30px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+      transition: all 0.3s ease;
+    }
+    button:hover {
+      background-color: #007c91;
+      transform: translateY(-3px);
+    }
+    #result {
+      margin-top: 30px;
+      white-space: pre-wrap;
+      background: #333;
+      padding: 20px;
+      border-radius: 10px;
+      color: #fff;
+      width: 80%;
+      max-width: 600px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    }
+    .label {
+      font-weight: bold;
+      color: #00bcd4;
+      font-size: 1.1rem;
+    }
+    .value {
+      margin: 10px 0 20px 0;
+      font-size: 1.1rem;
+      color: #fff;
+    }
+    .result-item {
+      border-bottom: 1px solid #444;
+      padding-bottom: 15px;
+      margin-bottom: 15px;
+    }
+    .result-item:last-child {
+      border-bottom: none;
+    }
+  </style>
+</head>
+<body>
+  <h2>📊 Voice Evaluation App</h2>
+  <div id="paragraph">Press "Start" to fetch a paragraph</div>
+  <button onclick="startRecording()">Start Recording</button>
+  <button onclick="stopRecording()" disabled id="submitBtn">Submit Recording</button>
+  <button onclick="fetchParagraph()" id="fetchParagraphBtn">Get New Paragraph</button>
+
+  <h3>📝 Result</h3>
+  <div id="result">Waiting for input...</div>
+
+  <script>
+    let paragraphToUse = '';
+    const resultDiv = document.getElementById("result");
+    let mediaRecorder;
+    let audioChunks = [];
+
+    // Function to fetch a random paragraph and display it
+    async function fetchParagraph() {
+      try {
+        const response = await fetch('http://localhost:8000/voice-process', { method: 'POST' });
+        const data = await response.json();
+        if (data.success) {
+          paragraphToUse = data.paragraph;
+          document.getElementById("paragraph").textContent = paragraphToUse;
+        } else {
+          document.getElementById("paragraph").textContent = "Error fetching paragraph. Please try again.";
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        document.getElementById("paragraph").textContent = "Error fetching paragraph. Please try again.";
+      }
+    }
+
+    // Function to start recording
+    async function startRecording() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+
+        mediaRecorder.ondataavailable = (event) => {
+          audioChunks.push(event.data);
+        };
+
+        mediaRecorder.onstop = async () => {
+          const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+          await submitRecording(audioBlob);
+        };
+
+        mediaRecorder.start();
+        document.getElementById("submitBtn").disabled = false;
+        document.getElementById("result").textContent = "🎤 Recording... Please read the paragraph aloud.";
+      } catch (error) {
+        console.error('Error:', error);
+        document.getElementById("result").textContent = "⚠️ Error accessing microphone. Please check permissions.";
+      }
+    }
+
+    // Function to stop recording and submit
+    async function stopRecording() {
+      if (mediaRecorder && mediaRecorder.state === "recording") {
+        mediaRecorder.stop();
+        document.getElementById("submitBtn").disabled = true;
+        document.getElementById("result").textContent = "Processing...";
+      }
+    }
+
+    // Function to submit the recording
+    async function submitRecording(audioBlob) {
+      try {
+        // Create form data with the audio file
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'recording.wav');
+
+        const response = await fetch('http://127.0.0.1:8000/voice-process', { 
+          method: 'POST',
+          body: formData
+        });
+        const data = await response.json();
+
+        if (data.success) {
+          displayResult(data);
+        } else {
+          resultDiv.innerHTML = `Error: ${data.message || 'Unknown error occurred'}`;
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        resultDiv.innerHTML = "⚠️ Error processing audio. Please try again.";
+      }
+    }
+  
+
+    // Display the result in a clean and structured manner
+    function displayResult(data) {
+      resultDiv.innerHTML = `
+        <div class="result-item"><span class="label">📘 Original Paragraph:</span> <div class="value">${data.paragraph}</div></div>
+        <div class="result-item"><span class="label">🗣️ Transcription:</span> <div class="value">${data.transcription || 'No transcription available'}</div></div>
+        <div class="result-item"><span class="label">⏱️ Speaking Pace:</span> <div class="value">${data.speaking_pace || 'N/A'}</div></div>
+        <div class="result-item"><span class="label">📝 Pace Feedback:</span> <div class="value">${data.pace_feedback || 'N/A'}</div></div>
+        <div class="result-item"><span class="label">✅ Accuracy:</span> <div class="value">${data.accuracy || 'N/A'}</div></div>
+        <div class="result-item"><span class="label">💬 Feedback:</span> <div class="value">${data.feedback || 'No feedback available'}</div></div>
+      `;
+    }
+
+    // Fetch paragraph when page loads
+    window.onload = fetchParagraph;
+  </script>
+</body>
+</html>
