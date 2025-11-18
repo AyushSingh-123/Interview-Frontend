@@ -1,4 +1,4 @@
-const BASE_URL = 'http://127.0.0.1:8000'; // Replace with your API base URL or set it to your actual API base URL
+const BASE_URL = 'https://interview-backend-12.onrender.com'; // Updated to use the new production backend URL
 
 async function callTextGeneration() {
   try {

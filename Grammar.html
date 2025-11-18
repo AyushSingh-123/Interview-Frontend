@@ -156,7 +156,7 @@
         const formData = new FormData();
         formData.append('audio', audioBlob, 'recording.wav');
 
-        const response = await fetch('http://127.0.0.1:8000/voice-process', { 
+        const response = await fetch('https://interview-backend-9.onrender.com/voice-process', { 
           method: 'POST',
           body: formData
         });

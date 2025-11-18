@@ -66,14 +66,8 @@ class VoiceInterviewApp {
         }
       });
 
-      // Start monitoring loops when interview is active
-      setInterval(() => {
-        if (this.isInterviewActive) {
-          this.checkVideo();
-          this.checkAudio();
-          this.sendTypingData();
-        }
-      }, 1000);
+      // Monitoring disabled
+      setInterval(() => {}, 1000);
 
     } catch (error) {
       console.error('Error initializing app:', error);
@@ -82,48 +76,18 @@ class VoiceInterviewApp {
   }
 
   async initializeFaceAPI() {
-    try {
-      // Load the face-api.js models from CDN
-      const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1/model/';
-      await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-      await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
-      await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL);
-      this.faceApiInitialized = true;
-      console.log('Face API initialized successfully');
-    } catch (error) {
-      console.error('Error loading face-api.js models:', error);
-      this.faceApiInitialized = false;
-    }
+    this.faceApiInitialized = false;
   }
 
   recordKeystroke(event) {
-    const now = Date.now();
-    const timeSinceLastStroke = now - this.lastKeystrokeTime;
-    
-    this.keystrokeBuffer.push({
-      key: event.key,
-      timestamp: now,
-      timeSinceLastStroke
-    });
-    
-    // Check for suspicious typing patterns
-    if (timeSinceLastStroke < 10) { // Very fast typing
-      this.updateMonitorStatus('typing', 'warning', 'Unusually fast typing detected');
-    } else if (this.keystrokeBuffer.length > 50 && 
-               this.keystrokeBuffer.every(k => k.timeSinceLastStroke < 20)) {
-      this.updateMonitorStatus('typing', 'error', 'Potential copy-paste detected');
-    } else {
-      this.updateMonitorStatus('typing', 'ok');
-    }
-    
-    this.lastKeystrokeTime = now;
+    // Monitoring disabled
+    this.keystrokeBuffer = [];
+    this.lastKeystrokeTime = Date.now();
   }
 
   async checkVideo() {
-    if (!this.faceApiInitialized) {
-      console.log('Face API not initialized yet');
-      return;
-    }
+    // Monitoring disabled
+    return;
     
     if (Date.now() - this.lastVideoCheck < 1000) {
       return;
@@ -293,7 +257,8 @@ class VoiceInterviewApp {
   }
 
   async checkAudio() {
-    if (Date.now() - this.lastAudioCheck < 1000) return;
+    // Monitoring disabled
+    return;
     
     try {
       console.log('Checking audio...');
@@ -344,15 +309,8 @@ class VoiceInterviewApp {
   }
 
   sendTypingData() {
-    if (this.keystrokeBuffer.length > 0) {
-      if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
-        this.websocket.send(JSON.stringify({
-          type: 'typing_data',
-          data: this.keystrokeBuffer
-        }));
-      }
-      this.keystrokeBuffer = [];
-    }
+    // Monitoring disabled
+    return;
   }
 
   isLookingAway(detection) {
@@ -433,69 +391,46 @@ class VoiceInterviewApp {
 
   async handleBotResponse(text) {
     this.addMessageToHistory(text, 'bot');
-    this.speakingStatus.textContent = 'Bot: Message Received';
+    // Pause listening while bot speaks to avoid capturing TTS audio
+    this.stopListening();
+    if (this.speakingStatus) { this.speakingStatus.textContent = 'Bot: Speaking...'; this.speakingStatus.classList.add('active'); }
     this.lastBotMessage = Date.now();
     this.speakText(text);
   }
 
   updateMonitorStatus(type, status, message = '') {
-    console.log(`Monitoring Update - Type: ${type}, Status: ${status}, Message: ${message}`);
-    
-    const statusElement = {
-      'face': this.faceStatus,
-      'audio': this.audioStatus,
-      'typing': this.typingStatus,
-      'response': this.responseStatus
-    }[type];
-
-    if (!statusElement) {
-      console.error(`Status element not found for type: ${type}`);
-      return;
-    }
-
-    console.log(`Updating status element:`, statusElement);
-
-    // Update status indicator
-    statusElement.className = 'monitor-status status-' + status;
-    statusElement.textContent = status.toUpperCase();
-
-    // Show warning message if needed
-    if (message && (status === 'warning' || status === 'error')) {
-      console.log('Creating warning message:', message);
-      const warningDiv = document.createElement('div');
-      warningDiv.className = 'warning-message';
-      warningDiv.textContent = message;
-      this.warningMessages.appendChild(warningDiv);
-      
-      // Make the warning visible with animation
-      setTimeout(() => {
-        console.log('Making warning visible');
-        warningDiv.classList.add('visible');
-      }, 10);
-      
-      // Remove the warning after 5 seconds
-      setTimeout(() => {
-        console.log('Removing warning');
-        warningDiv.classList.remove('visible');
-        setTimeout(() => warningDiv.remove(), 300);
-      }, 5000);
-    }
+    // Monitoring disabled
+    return;
   }
 
   async startInterview() {
     try {
-      this.websocket = new WebSocket('ws://127.0.0.1:5000/ws');
+      // Prefer deployed backend on Render; set USE_PROD=false for local dev
+      const USE_PROD = true;
+      const PROD_WS_URL = 'wss://deployed-vbtg.onrender.com/ws';
+      const LOCAL_WS_URL = 'ws://127.0.0.1:5000/ws';
+      const WS_URL = USE_PROD ? PROD_WS_URL : LOCAL_WS_URL;
+      console.log('Connecting to WebSocket:', WS_URL);
+      this.websocket = new WebSocket(WS_URL);
       
       this.websocket.onmessage = async (event) => {
-        const message = JSON.parse(event.data);
-        if (message.type === 'bot_response') {
+        let message;
+        try {
+          message = JSON.parse(event.data);
+        } catch (_) {
+          console.warn('Non-JSON WS message ignored:', event.data);
+          return;
+        }
+        if (message && message.type === 'bot_response' && message.text) {
           await this.handleBotResponse(message.text);
-          
-          if (message.text.includes('=== Interview Feedback ===')) {
+          if (typeof message.text === 'string' && message.text.includes('Interview Feedback')) {
             this.handleInterviewEnd();
           }
-        } else if (message.type === 'error') {
+        } else if (message && message.type === 'error' && message.text) {
           this.addMessageToHistory(message.text, 'error');
+        } else {
+          // Unknown/unsupported message types are safely ignored
+          console.debug('Ignored WS message:', message);
         }
       };
 
@@ -505,8 +440,10 @@ class VoiceInterviewApp {
         this.stopBtn.disabled = false;
         this.userInput.disabled = false;
         this.sendButton.disabled = false;
-        this.listeningStatus.textContent = 'Connected: Ready for input';
+        if (this.listeningStatus) { this.listeningStatus.textContent = 'Connected: Ready for input'; }
         this.userInput.focus();
+        // Auto-enable voice input on connect
+        this.startListening();
       };
 
       this.websocket.onerror = (error) => {
@@ -542,8 +479,8 @@ class VoiceInterviewApp {
       this.stopBtn.disabled = true;
       this.userInput.disabled = true;
       this.sendButton.disabled = true;
-      this.listeningStatus.textContent = 'Not Connected';
-      this.speakingStatus.textContent = 'Bot: Not Active';
+      if (this.listeningStatus) { this.listeningStatus.textContent = 'Not Connected'; }
+      if (this.speakingStatus) { this.speakingStatus.textContent = 'Bot: Not Active'; }
     } catch (error) {
       console.error('Error stopping interview:', error);
     }
@@ -555,8 +492,8 @@ class VoiceInterviewApp {
     this.stopBtn.disabled = true;
     this.userInput.disabled = true;
     this.sendButton.disabled = true;
-    this.listeningStatus.textContent = 'Interview Completed';
-    this.speakingStatus.textContent = 'Bot: Interview Ended';
+    if (this.listeningStatus) { this.listeningStatus.textContent = 'Interview Completed'; }
+    if (this.speakingStatus) { this.speakingStatus.textContent = 'Bot: Interview Ended'; }
   }
 
   async handleUserResponse(text) {
@@ -580,24 +517,52 @@ class VoiceInterviewApp {
   initializeSpeechRecognition() {
     if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
       this.recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-      this.recognition.continuous = false;
-      this.recognition.interimResults = false;
-      this.recognition.lang = 'en-US';
+      // Continuous dictation with interim hypotheses
+      this.recognition.continuous = true;
+      this.recognition.interimResults = true;
+      // Default to Indian English for better accuracy in your locale; change as needed
+      this.recognition.lang = 'en-IN';
 
       this.recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        this.userInput.value = transcript;
-        this.sendUserInput();
+        let finalTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const result = event.results[i];
+          if (result.isFinal) {
+            finalTranscript += result[0].transcript;
+          }
+        }
+        if (finalTranscript.trim()) {
+          const spoken = finalTranscript.trim();
+          console.log('Recognized (voice):', spoken);
+          // Show the recognized text in chat before sending
+          this.addMessageToHistory(spoken, 'user');
+          this.userInput.value = spoken;
+          // Stop listening after one utterance; will auto-resume after bot finishes speaking
+          this.stopListening();
+          this.sendUserInput();
+        }
       };
 
       this.recognition.onerror = (event) => {
+        // Handle common transient errors silently and auto-recover
+        if (event.error === 'no-speech' || event.error === 'audio-capture' || event.error === 'network') {
+          if (this.isListening) {
+            // Retry after a short delay
+            setTimeout(() => {
+              try { this.recognition.start(); } catch (_) {}
+            }, 500);
+          }
+          return;
+        }
+        // For other errors, stop listening
         console.error('Speech recognition error:', event.error);
         this.stopListening();
       };
 
       this.recognition.onend = () => {
+        // Auto-restart if user still wants voice mode
         if (this.isListening) {
-          this.recognition.start();
+          try { this.recognition.start(); } catch (_) {}
         }
       };
     } else {
@@ -608,16 +573,18 @@ class VoiceInterviewApp {
   startListening() {
     if (this.recognition) {
       this.isListening = true;
-      this.recognition.start();
-      this.voiceBtn.classList.add('active');
+      try { this.recognition.start(); } catch (_) {}
+      if (this.voiceBtn) this.voiceBtn.classList.add('active');
+      if (this.listeningStatus) { this.listeningStatus.textContent = 'Listening...'; this.listeningStatus.classList.add('active'); }
     }
   }
 
   stopListening() {
     if (this.recognition) {
       this.isListening = false;
-      this.recognition.stop();
-      this.voiceBtn.classList.remove('active');
+      try { this.recognition.stop(); } catch (_) {}
+      if (this.voiceBtn) this.voiceBtn.classList.remove('active');
+      if (this.listeningStatus) { this.listeningStatus.textContent = 'Connected: Ready for input'; this.listeningStatus.classList.remove('active'); }
     }
   }
 
@@ -630,6 +597,13 @@ class VoiceInterviewApp {
       utterance.lang = 'en-US';
       utterance.rate = 1.0;
       utterance.pitch = 1.0;
+      utterance.onend = () => {
+        if (this.speakingStatus) { this.speakingStatus.textContent = 'Bot: Message Received'; this.speakingStatus.classList.remove('active'); }
+        // Auto-resume listening after bot finishes speaking, if interview is still active
+        if (this.isInterviewActive) {
+          this.startListening();
+        }
+      };
       this.synthesis.speak(utterance);
     }
   }

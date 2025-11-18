@@ -170,7 +170,7 @@
       summaryBox.textContent = "";
 
       try {
-        const response = await fetch("http://127.0.0.1:8000/process_pdf", {
+        const response = await fetch("https://interview-backend-9.onrender.com/process_pdf", {
           method: "POST",
           body: formData
         });
