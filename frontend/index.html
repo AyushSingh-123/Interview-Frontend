@@ -613,7 +613,13 @@
                 e.preventDefault();
                 alert('Paste operation is not allowed during the interview.');
             });
-        
+            
+            field.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                alert('Right-click is not allowed during the interview.');
+            });
+        });
+
         // Add copy-paste prevention to the entire document
         document.addEventListener('copy', function(e) {
             e.preventDefault();
@@ -625,10 +631,6 @@
             alert('Paste operation is not allowed during the interview.');
         });
         
-        document.addEventListener('contextmenu', function(e) {
-            e.preventDefault();
-            alert('Right-click is not allowed during the interview.');
-        });
 
         // Add a visual indicator
         const indicator = document.createElement('div');
